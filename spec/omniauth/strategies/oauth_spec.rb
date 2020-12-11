@@ -10,6 +10,9 @@ describe "OmniAuth::Strategies::OAuth" do
     Rack::Builder.new do
       use OmniAuth::Test::PhonySession
       use OmniAuth::Builder do
+        configure do |c|
+          c.request_validation_phase = nil
+        end
         provider MyOAuthProvider, "abc", "def", :client_options => {:site => "https://api.example.org"}, :name => "example.org"
         provider MyOAuthProvider, "abc", "def", :client_options => {:site => "https://api.example.org"}, :authorize_params => {:abc => "def"}, :name => "example.org_with_authorize_params"
         provider MyOAuthProvider, "abc", "def", :client_options => {:site => "https://api.example.org"}, :request_params => {:scope => "http://foobar.example.org"}, :name => "example.org_with_request_params"
@@ -34,16 +37,17 @@ describe "OmniAuth::Strategies::OAuth" do
   describe "/auth/{name}" do
     context "successful" do
       before do
-        get "/auth/example.org"
+        post "/auth/example.org"
       end
 
       it "should redirect to authorize_url" do
+        # require 'pry'; binding.pry
         expect(last_response).to be_redirect
         expect(last_response.headers["Location"]).to eq("https://api.example.org/oauth/authorize?oauth_token=yourtoken")
       end
 
       it "should redirect to authorize_url with authorize_params when set" do
-        get "/auth/example.org_with_authorize_params"
+        post "/auth/example.org_with_authorize_params"
         expect(last_response).to be_redirect
         expect([
           "https://api.example.org/oauth/authorize?abc=def&oauth_token=yourtoken",
@@ -56,7 +60,7 @@ describe "OmniAuth::Strategies::OAuth" do
       end
 
       it "should pass request_params to get_request_token" do
-        get "/auth/example.org_with_request_params"
+        post "/auth/example.org_with_request_params"
         expect(WebMock).to have_requested(:post, "https://api.example.org/oauth/request_token").
           with { |req| req.body == "scope=http%3A%2F%2Ffoobar.example.org" }
       end
@@ -66,7 +70,7 @@ describe "OmniAuth::Strategies::OAuth" do
       before do
         stub_request(:post, "https://api.example.org/oauth/request_token").
           to_raise(::Net::HTTPFatalError.new('502 "Bad Gateway"', nil))
-        get "/auth/example.org"
+        post "/auth/example.org"
       end
 
       it "should call fail! with :service_unavailable" do
@@ -78,7 +82,7 @@ describe "OmniAuth::Strategies::OAuth" do
         before do
           stub_request(:post, "https://api.example.org/oauth/request_token").
             to_raise(::OpenSSL::SSL::SSLError.new("SSL_connect returned=1 errno=0 state=SSLv3 read server certificate B: certificate verify failed"))
-          get "/auth/example.org"
+          post "/auth/example.org"
         end
 
         it "should call fail! with :service_unavailable" do
